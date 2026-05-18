@@ -1,0 +1,30 @@
+# monitoring/alert_rules.yml
+groups:
+  - name: platform_alerts
+    rules:
+      - alert: APIGatewayDown
+        expr: up{job="api-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API Gateway is down"
+          description: "API Gateway has been unreachable for more than 1 minute."
+
+      - alert: HighLatencyP95
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="api-gateway"}[5m])) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P95 latency on API Gateway"
+          description: "P95 latency has exceeded 2 seconds for more than 2 minutes."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on API Gateway"
+          description: "Error rate has exceeded 10% for more than 2 minutes."
