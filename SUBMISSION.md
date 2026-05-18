@@ -80,6 +80,8 @@ Nộp link repo GitHub qua LMS
 
 ## 5 Câu Hỏi Cần Trả Lời Khi Nộp
 
+> Câu trả lời hoàn chỉnh cho bản nộp này nằm trong `SUBMISSION_ANSWERS.md`.
+
 1. **Phân tích các trade-offs trong thiết kế kiến trúc AI platform của bạn. Bạn đã cân bằng giữa performance, reliability, và maintainability như thế nào?**
 
 2. **Trong kiến trúc hybrid (Local + Kaggle), bạn xử lý ngắt kết nối giữa local và Kaggle như thế nào? Có cơ chế fallback không?**

@@ -1,5 +1,7 @@
 # prefect/flows/kafka_to_delta.py
 from prefect import flow, task
+from prefect.client.schemas.schedules import CronSchedule
+from prefect.deployments import Deployment
 from kafka import KafkaConsumer
 import json, os
 import pandas as pd
@@ -10,7 +12,9 @@ def consume_and_process():
     """Consume data from Kafka topic"""
     consumer = KafkaConsumer(
         "data.raw",
-        bootstrap_servers="kafka:9092",
+        bootstrap_servers=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092"),
+        group_id="lab28-prefect",
+        enable_auto_commit=True,
         auto_offset_reset="earliest",
         consumer_timeout_ms=5000,
         value_deserializer=lambda m: json.loads(m.decode())
@@ -36,15 +40,20 @@ def save_to_delta(records):
     df.to_parquet(f"{path}/batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet")
     print(f"Saved {len(df)} records to Delta Lake")
 
-@flow(name="Kafka to Delta Pipeline", schedule="* */5 * * *")
+@flow(name="Kafka to Delta Pipeline")
 def kafka_to_delta_flow():
     """Main flow: consume from Kafka and save to Delta Lake"""
     records = consume_and_process()
     save_to_delta(records)
 
 if __name__ == "__main__":
-    # Deploy flow to Prefect Orion
-    kafka_to_delta_flow.deploy(
+    deployment = Deployment.build_from_flow(
+        flow=kafka_to_delta_flow,
         name="kafka-to-delta",
-        work_queue_name="lab28-worker"
+        work_queue_name="default",
+        schedule=CronSchedule(cron="*/5 * * * *", timezone="Asia/Ho_Chi_Minh"),
+        is_schedule_active=True,
+        tags=["lab28", "kafka", "delta"],
     )
+    deployment.apply()
+    print("Deployment applied: Kafka to Delta Pipeline/kafka-to-delta")

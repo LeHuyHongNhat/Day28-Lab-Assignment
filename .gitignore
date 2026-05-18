@@ -138,6 +138,9 @@ celerybeat.pid
 *.aof
 *.pid
 
+# Lab 28 runtime data
+delta-lake/raw/batch_*.parquet
+
 # RabbitMQ
 mnesia/
 rabbitmq/

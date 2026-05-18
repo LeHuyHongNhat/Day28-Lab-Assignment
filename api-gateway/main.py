@@ -2,6 +2,13 @@
 from fastapi import FastAPI, Request, HTTPException
 from prometheus_fastapi_instrumentator import Instrumentator
 import httpx, os, time, logging, json
+from datetime import datetime, timezone
+from uuid import uuid4
+
+try:
+    from langsmith import Client as LangSmithClient
+except Exception:  # pragma: no cover - tracing is optional at runtime
+    LangSmithClient = None
 
 # ── Logging ──────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -12,6 +19,13 @@ Instrumentator().instrument(app).expose(app)  # Integration 9: Prometheus
 
 VLLM_URL = os.environ.get("VLLM_URL", "http://localhost:8001")
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
+LANGCHAIN_API_KEY = os.environ.get("LANGCHAIN_API_KEY")
+LANGCHAIN_PROJECT = os.environ.get("LANGCHAIN_PROJECT", "lab28-platform")
+langsmith_client = (
+    LangSmithClient(api_key=LANGCHAIN_API_KEY)
+    if LangSmithClient and LANGCHAIN_API_KEY
+    else None
+)
 
 # ── Circuit Breaker State ────────────────────────────────────
 circuit_breaker = {
@@ -46,6 +60,28 @@ def record_success():
     cb = circuit_breaker
     cb["failures"] = 0
     cb["state"] = "closed"
+
+def emit_langsmith_trace(query, answer, model, latency_ms, context_count, error=None):
+    """Best-effort trace emission; observability must not break inference."""
+    if not langsmith_client:
+        return
+
+    now = datetime.now(timezone.utc)
+    try:
+        langsmith_client.create_run(
+            id=uuid4(),
+            name="api-gateway-chat",
+            run_type="chain",
+            project_name=LANGCHAIN_PROJECT,
+            inputs={"query": query, "context_count": context_count},
+            outputs={"answer": answer, "model": model, "latency_ms": latency_ms},
+            error=error,
+            start_time=now,
+            end_time=now,
+            tags=["lab28", "api-gateway"],
+        )
+    except Exception as e:
+        logger.warning(f"LangSmith trace emission failed: {e}")
 
 
 @app.post("/api/v1/chat")
@@ -101,19 +137,25 @@ async def chat(request: Request):
 
         logger.info(f"Chat completed in {latency:.2f}ms")
 
+        answer = result["choices"][0]["message"]["content"]
+        model = result["model"]
+        emit_langsmith_trace(query, answer, model, round(latency, 2), len(context))
+
         return {
-            "answer": result["choices"][0]["message"]["content"],
+            "answer": answer,
             "latency_ms": round(latency, 2),
-            "model": result["model"]
+            "model": model
         }
 
     except httpx.TimeoutException:
         record_failure()
         logger.error("LLM inference timed out")
+        emit_langsmith_trace(query, "", "error", 0, 0, error="LLM inference timed out")
         raise HTTPException(status_code=504, detail="LLM inference timed out")
     except Exception as e:
         record_failure()
         logger.error(f"Chat endpoint error: {e}")
+        emit_langsmith_trace(query, "", "error", 0, 0, error=str(e))
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 

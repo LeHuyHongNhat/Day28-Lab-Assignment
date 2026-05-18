@@ -35,6 +35,7 @@ Kaggle (GPU T4/P100):
 
 ```bash
 cd lab28
+pip install -r requirements.txt
 docker compose up -d
 docker compose ps  # Kiểm tra tất cả services Up
 ```
@@ -126,6 +127,7 @@ cp .env.example .env
 ```bash
 cd prefect/flows
 pip install -r requirements.txt
+export PREFECT_API_URL=http://localhost:4200/api
 python kafka_to_delta.py
 ```
 
@@ -139,10 +141,11 @@ python scripts/01_ingest_to_kafka.py
 ### 6. Chạy Smoke Tests
 
 ```bash
+pip install -r requirements.txt
 pytest smoke-tests/ -v
 ```
 
-Kỳ vọng: 5/5 tests passing
+Kỳ vọng: 8/8 tests passing
 
 ### 7. Production Readiness Check
 
@@ -184,6 +187,10 @@ curl -X POST http://localhost:8000/api/v1/chat \
 - **Grafana Dashboard:** http://localhost:3000
 - **Prometheus:** http://localhost:9090
 - **Prefect UI:** http://localhost:4200
+
+Prometheus scrape targets hợp lệ trong bản nộp gồm `api-gateway` và `qdrant`.
+Kafka và Prefect vẫn chạy trong Docker Compose, nhưng không được scrape trực tiếp
+vì hai service này không expose Prometheus metrics chuẩn ở port mặc định.
 
 ## Troubleshooting
 

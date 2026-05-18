@@ -21,7 +21,7 @@ groups:
           description: "P95 latency has exceeded 2 seconds for more than 2 minutes."
 
       - alert: HighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.1
+        expr: sum(rate(http_requests_total{job="api-gateway", status=~"5.."}[5m])) / sum(rate(http_requests_total{job="api-gateway"}[5m])) > 0.1
         for: 2m
         labels:
           severity: warning
